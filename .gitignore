@@ -1,4 +1,17 @@
+# Secrets
 .env
+.env.*
+!.env.example
+
+# Python
 __pycache__/
+*.py[cod]
 .pytest_cache/
+.venv/
+
+# Local databases and generated files
 *.db
+*.sqlite
+*.sqlite3
+.coverage
+htmlcov/

@@ -1,0 +1,10 @@
+{
+  "name": "Swipe&Watch",
+  "short_name": "Swipe&Watch",
+  "description": "Выбирай кино по настроению",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4f2ed",
+  "theme_color": "#f4f2ed",
+  "icons": [{"src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable"}]
+}

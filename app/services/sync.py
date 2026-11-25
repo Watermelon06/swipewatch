@@ -35,9 +35,12 @@ class SyncReport:
 
 
 async def upsert_drafts(db: AsyncSession, drafts: list[Draft], report: SyncReport) -> int:
-    rows = (await db.execute(select(Movie.id, Movie.source, Movie.source_id, Movie.dedupe_key))).all()
+    rows = (await db.execute(select(Movie.id, Movie.source, Movie.source_id, Movie.dedupe_key,
+                                    Movie.original_title, Movie.year))).all()
     by_src = {(r.source, r.source_id): r.id for r in rows}
     keys = {r.dedupe_key for r in rows}
+    # альтернативные ключи по оригинальному названию уже сохранённых фильмов
+    keys |= {dedupe_key(r.original_title, r.year) for r in rows if r.original_title}
     added = 0
     for d in drafts:
         existing_id = by_src.get((d.source, d.source_id))
@@ -60,7 +63,7 @@ async def upsert_drafts(db: AsyncSession, drafts: list[Draft], report: SyncRepor
             synopsis=d.synopsis, short_hook=d.short_hook, poster_url=d.poster_url, external_url=d.external_url,
             enriched_at=utcnow() if d.source == "itunes" else None,
         ))
-        keys.add(d.key)
+        keys |= keys_to_check             # и основной, и альтернативный ключ — чтобы поймать дубли в этом же прогоне
         added += 1
     await db.commit()
     return added

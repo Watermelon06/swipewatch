@@ -6,8 +6,9 @@ from fastapi import APIRouter, FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from .config import get_settings
-from .db import engine
+from .db import engine, SessionLocal
 from .models import Base
+from .migrations import backfill_collection, run_migrations
 from .routers import admin, auth, me, meta, sessions
 
 logging.basicConfig(level=logging.INFO)
@@ -18,6 +19,8 @@ async def lifespan(app: FastAPI):
     if get_settings().auto_create_tables:      # для MVP; потом заменить на Alembic
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+        await backfill_collection(SessionLocal)
+    await run_migrations(engine)
     yield
     await engine.dispose()
 

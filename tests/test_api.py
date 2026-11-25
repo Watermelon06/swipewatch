@@ -65,7 +65,8 @@ async def test_event_validation(client):
     bad_movie = {"event_id": "evt-00000009", "type": "right", "movie_id": 99999}
     assert (await client.post(f"/api/sessions/{sid}/events", json={"events": [bad_movie]})).status_code == 400
     no_rating = {"event_id": "evt-0000000a", "type": "up", "movie_id": int(data["cards"][0]["id"])}
-    assert (await client.post(f"/api/sessions/{sid}/events", json={"events": [no_rating]})).status_code == 400
+    # «Уже смотрел» без оценки («Без оценки» в UI) — допустимо
+    assert (await client.post(f"/api/sessions/{sid}/events", json={"events": [no_rating]})).status_code == 200
 
 
 async def test_undo_restores_state(client):
@@ -79,9 +80,14 @@ async def test_undo_restores_state(client):
 
 
 async def test_taste_shifts_next_batches(client):
-    data = await start(client, limit=20, initial_genres=["Хоррор", "Хоррор", "Хоррор", "Хоррор"], surprise=False)
-    ids, _ = await drain(client, data)
-    assert len(ids) == 20
+    # F3: выбранный жанр — жёсткий фильтр. Колода состоит только из хорроров и заканчивается, когда они кончились.
+    data = await start(client, limit=20, initial_genres=["Хоррор"], surprise=False)
+    ids, last = await drain(client, data)
+    assert 0 < len(ids) <= 20 and len(ids) == len(set(ids))
+    assert last["exhausted"] and last["planned_total"] == len(ids)
+    sid = data["session_id"]
+    detail = (await client.get("/api/sessions/active")).json()["session"]
+    assert all("Хоррор" in c["genres"] for c in detail["cards"])
 
 
 async def test_cannot_touch_foreign_session(client, seeded):

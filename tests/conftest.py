@@ -5,6 +5,7 @@ _db = os.path.join(tempfile.mkdtemp(), "test.db")
 os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{_db}"
 os.environ["SECRET_KEY"] = "test-secret"
 os.environ["ADMIN_TOKEN"] = "admin"
+os.environ["ANON_RATE_LIMIT_PER_HOUR"] = "0"
 
 import random  # noqa: E402
 

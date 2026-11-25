@@ -12,6 +12,12 @@ class Settings(BaseSettings):
     kp_api_key: str = ""
     admin_token: str = ""
     auto_create_tables: bool = True
+    anon_rate_limit_per_hour: int = 60   # гостевых аккаунтов с одного IP в час; 0 = без лимита (за NAT/оператором IP общий)
+    trusted_proxy_count: int = 1         # сколько доверенных прокси перед приложением (для X-Forwarded-For); 0 = не доверять заголовку
+    token_ttl_days: int = 180            # срок жизни токена; продлевается автоматически при активности
+    vk_client_id: str = ""
+    vk_redirect_uri: str = ""
+    vk_service_token: str = ""  # требуется только для некоторых типов приложений VK ID
 
     # Логика колоды
     skip_cooldown_days: int = 30      # скипнутый фильм не показываем N дней

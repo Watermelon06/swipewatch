@@ -19,6 +19,20 @@ _KEYWORDS = [
 ]
 
 
+# Названия из старых клиентов/сессий -> жанры каталога
+GENRE_ALIASES = {"Ужасы": "Хоррор", "Фэнтези": "Мистика", "Мелодрама": "Драма"}
+
+
+def canonical_genres(raw: list[str]) -> list[str]:
+    """Приводит жанры из запроса к ALL_GENRES (алиасы -> канон, неизвестные отбрасываются)."""
+    out: list[str] = []
+    for item in raw:
+        genre = GENRE_ALIASES.get(item, item)
+        if genre in ALL_GENRES and genre not in out:
+            out.append(genre)
+    return out
+
+
 def normalize_genres(raw: list[str]) -> list[str]:
     out: list[str] = []
     for item in raw:
