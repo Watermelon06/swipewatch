@@ -175,6 +175,10 @@ def _pool(catalog: Sequence[CatalogItem], *, n: int, excluded: set[int], filters
     max_duration = filters.get("max_duration")
     if max_duration:
         pool = [c for c in pool if c.duration_min is None or c.duration_min <= int(max_duration)]
+    min_duration = filters.get("min_duration")
+    if min_duration:
+        # «длинные»: фильм без известной длительности сюда не попадает
+        pool = [c for c in pool if c.duration_min is not None and c.duration_min >= int(min_duration)]
     min_rating = filters.get("min_rating")
     if min_rating:
         pool = [c for c in pool if c.rating is None or c.rating >= float(min_rating)]

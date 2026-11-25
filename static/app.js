@@ -52,7 +52,7 @@ const ICONS = {
 };
 const state = {
   token: '', page: 'home', meta: null, dashboard: null, profile: null, providers: {vk:false},
-  selectedGenres: new Set(), sessionLimit: 15, filterDefaults: {content_type:'all',max_duration:'',year_from:'',year_to:'',min_rating:'',max_age:''},
+  selectedGenres: new Set(), sessionLimit: 15, filterDefaults: {content_type:'all',max_duration:'',min_duration:'',year_from:'',year_to:'',min_rating:'',max_age:''},
   session: null, collectionView: 'watchlist', collectionSearch: '', collectionGenre: '',
   collectionItems: [], historyItems: [], movieCache: new Map(), detailMovie: null, toastTimer: null,
   loadingMore: false, finishing: false, swiping: false, collectionTotal: 0, collectionGenreSet: new Set(), pendingRatingMovie: null, sessionDetail: null,
@@ -62,6 +62,12 @@ const state = {
 const $ = (selector, root=document) => root.querySelector(selector);
 const $$ = (selector, root=document) => [...root.querySelectorAll(selector)];
 const svg = (name, cls='') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ICONS.info}</svg>`;
+ICONS.help='<circle cx="12" cy="12" r="9"/><path d="M9.6 9.4a2.5 2.5 0 1 1 3.6 2.2c-.8.4-1.2 1-1.2 1.8M12 17h.01"/>';
+const flat=t=>String(t||'').replace(/\s*[\r\n]+\s*/g,' ').trim();   // V1: склеиваем переносы строк
+const lsGet=k=>{try{return localStorage.getItem(k);}catch(_){return null;}};
+const lsSet=(k,v)=>{try{localStorage.setItem(k,v);}catch(_){}};
+function hydrateIcons(root=document){root.querySelectorAll('[data-icon]').forEach(el=>{if(!el.firstElementChild)el.innerHTML=svg(el.dataset.icon);});}   // U1
+hydrateIcons();
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const safeUrl = value => { try { const u = new URL(value, location.origin); return ['http:','https:'].includes(u.protocol) ? u.href : ''; } catch { return ''; } };
 const fmtDate = value => { if (!value) return 'Недавно'; const d = new Date(value); return new Intl.DateTimeFormat('ru-RU',{day:'numeric',month:'long',year:'numeric'}).format(d); };
@@ -181,13 +187,13 @@ function swipeCardHTML(movie, interactive) {
   const typeLine = [movie.type || 'Фильм', movie.year, movie.age].filter(Boolean).map(esc).join(' <span>·</span> ');
   const topType = [movie.type || 'Фильм', movie.year].filter(Boolean).map(esc).join(' <i>·</i> ');
   return `<div class="cinema-poster">${moviePoster(movie,'',true)}<div class="cinema-poster-shade"></div>
-    ${interactive ? `<div id="stampRight" class="swipe-stamp stamp-right">${svg('bookmark')} В МОЙ СПИСОК</div><div id="stampLeft" class="swipe-stamp stamp-left">${svg('close')} ПРОПУСТИТЬ</div><div id="stampUp" class="swipe-stamp stamp-up">${svg('check')} УЖЕ СМОТРЕЛ</div>` : ''}
+    ${interactive ? `<div id="stampRight" class="swipe-stamp stamp-right">${svg('bookmark')} ХОЧУ СМОТРЕТЬ</div><div id="stampLeft" class="swipe-stamp stamp-left">${svg('close')} НЕ МОЁ</div><div id="stampUp" class="swipe-stamp stamp-up">${svg('check')} УЖЕ СМОТРЕЛ</div>` : ''}
     <div class="poster-topline"><span class="poster-type">${topType}</span><div class="poster-ratings">${kp?`<span class="poster-kp">★ ${kp}</span>`:''}${imdb?`<span class="poster-imdb">IMDb ${imdb}</span>`:''}</div></div>
     <div class="poster-bottomline"><div class="poster-genres">${(movie.genres||[]).slice(0,3).map(g=>`<span>${esc(g)}</span>`).join('')}</div>${movie.duration?`<span class="poster-runtime">${esc(movie.duration)}</span>`:''}</div>
     <span class="poster-index">S<span>·</span>W / PICK</span></div>
   <div class="cinema-info">
     <div class="cinema-info-heading"><div class="cinema-type-line">${typeLine}</div><h2>${esc(movie.title)}</h2>${orig?`<p class="cinema-original">${esc(orig)}</p>`:''}</div>
-    <p class="cinema-hook">${esc(movie.synopsis||movie.shortHook||'Описание пока отсутствует.')}</p>
+    <p class="cinema-hook">${esc(flat(movie.synopsis||movie.shortHook||'Описание пока отсутствует.'))}</p>
     ${interactive ? `<button class="cinema-more" data-action="movie-details" data-id="${esc(movie.id)}">Подробнее о фильме ${svg('chevron')}</button>` : ''}
   </div>`;
 }
@@ -258,6 +264,7 @@ async function bootstrap() {
     refreshIdentity();
     if('serviceWorker' in navigator){ navigator.serviceWorker.register('/sw.js').catch(()=>{}); }
     navigate('home');
+    if(!lsGet('sw_onboarded'))openOnboarding();
   } catch(error) {
     console.error(error);
     $('#view').innerHTML=`<div class="empty-state"><div class="empty-icon">${svg('refresh')}</div><h3>Не удалось подключиться</h3><p>${esc(String(error.message||'').replace(/[.\s]+$/,''))}. Нажмите «Повторить» — обычно этого достаточно.</p><button class="btn btn-primary" data-action="retry">Повторить</button></div>`;
@@ -305,7 +312,7 @@ function renderDiscover() {
       <section class="panel"><div class="eyebrow">01 / НАСТРОЕНИЕ</div><h2 class="panel-title" style="margin-top:7px">Что вам сейчас ближе?</h2><p class="panel-subtitle">Можно выбрать несколько вариантов или оставить всё открытым.</p><div class="genre-grid">${genresHtml}</div></section>
       <section class="panel" style="margin-top:13px"><div class="eyebrow">02 / ФОРМАТ И ВРЕМЯ</div><h2 class="panel-title" style="margin-top:7px">Какие фильмы показывать?</h2><div class="form-grid">
         <div class="field"><label for="filterType">Формат</label><select id="filterType" class="select-field"><option value="all" ${state.filterDefaults.content_type==='all'?'selected':''}>Фильмы и сериалы</option><option value="films" ${state.filterDefaults.content_type==='films'?'selected':''}>Только фильмы</option><option value="series" ${state.filterDefaults.content_type==='series'?'selected':''}>Только сериалы</option></select></div>
-        <div class="field"><label for="filterDuration">Максимальная длительность</label><select id="filterDuration" class="select-field"><option value="">Любая</option><option value="90" ${state.filterDefaults.max_duration===90?'selected':''}>До 90 минут</option><option value="120" ${state.filterDefaults.max_duration===120?'selected':''}>До 2 часов</option><option value="150" ${state.filterDefaults.max_duration===150?'selected':''}>До 2,5 часов</option><option value="180" ${state.filterDefaults.max_duration===180?'selected':''}>До 3 часов</option></select></div>
+        <div class="field"><label for="filterDuration">Длительность</label><select id="filterDuration" class="select-field"><option value="">Любая</option><option value="90" ${state.filterDefaults.max_duration===90?'selected':''}>До 90 минут</option><option value="120" ${state.filterDefaults.max_duration===120?'selected':''}>До 2 часов</option><option value="150" ${state.filterDefaults.max_duration===150?'selected':''}>До 2,5 часов</option><option value="180" ${state.filterDefaults.max_duration===180?'selected':''}>До 3 часов</option><option value="long" ${state.filterDefaults.min_duration===180?'selected':''}>Больше 3 часов (длинные)</option></select><small class="field-hint">Если длительность фильма неизвестна, в «Больше 3 часов» он не попадёт.</small></div>
         <div class="field"><label for="filterYearFrom">Год выпуска от</label><input id="filterYearFrom" class="input-field" type="number" min="1888" max="2100" placeholder="Любой" value="${esc(state.filterDefaults.year_from||'')}"></div>
         <div class="field"><label for="filterYearTo">Год выпуска до</label><input id="filterYearTo" class="input-field" type="number" min="1888" max="2100" placeholder="Любой" value="${esc(state.filterDefaults.year_to||'')}"></div>
         <div class="field"><label for="filterRating">Минимальный рейтинг</label><select id="filterRating" class="select-field"><option value="">Неважно</option><option value="6" ${state.filterDefaults.min_rating===6?'selected':''}>От 6.0</option><option value="7" ${state.filterDefaults.min_rating===7?'selected':''}>От 7.0</option><option value="8" ${state.filterDefaults.min_rating===8?'selected':''}>От 8.0</option></select></div>
@@ -315,11 +322,13 @@ function renderDiscover() {
     </div><aside class="discovery-aside"><div class="panel"><div class="eyebrow">КАК ЭТО РАБОТАЕТ</div><h3 class="panel-title" style="margin-top:7px">Подбор учится на ваших реакциях</h3><p class="panel-subtitle" style="margin-top:12px">Если выбрать жанр, мы покажем только его. Лайки, пропуски и оценки помогают понять, что вам по вкусу, а в конце вы получите лучшее совпадение и несколько хороших вариантов.</p></div></aside></div>`;
 }
 
-const EMPTY_FILTERS={content_type:'all',max_duration:'',year_from:'',year_to:'',min_rating:'',max_age:''};
+const EMPTY_FILTERS={content_type:'all',max_duration:'',min_duration:'',year_from:'',year_to:'',min_rating:'',max_age:''};
 function readSessionFilters() {
   const read=(key,id)=>{const el=document.getElementById(id);return el?el.value:(state.filterDefaults[key]??'');};
   const filters={content_type:read('content_type','filterType')||'all'};
-  [['max_duration','filterDuration'],['year_from','filterYearFrom'],['year_to','filterYearTo'],['min_rating','filterRating'],['max_age','filterAge']].forEach(([key,id])=>{const v=read(key,id);if(v!==''&&v!=null)filters[key]=Number(v);});
+  [['max_duration','filterDuration'],['year_from','filterYearFrom'],['year_to','filterYearTo'],['min_rating','filterRating'],['max_age','filterAge']].forEach(([key,id])=>{const v=read(key,id);
+    if(key==='max_duration'){if(v==='long'){filters.min_duration=180;return;}if(!document.getElementById(id)&&state.filterDefaults.min_duration)filters.min_duration=state.filterDefaults.min_duration;}
+    if(v!==''&&v!=null)filters[key]=Number(v);});
   state.filterDefaults={...EMPTY_FILTERS,...filters};
   return filters;
 }
@@ -378,13 +387,19 @@ function renderSession() {
   const previous=session.reactions.slice(-4).reverse();
   $('#view').innerHTML=`<div class="session-screen"><div class="session-shell"><div class="session-main">
       <div class="session-topline"><div class="session-progress"><div class="progress-copy">Карточка <strong id="progPos">${position}</strong> из <strong id="progTotal">${total}</strong></div><div class="progress-track"><span id="progBar" style="width:${percentage}%"></span></div></div>
+        <button class="btn-icon" data-action="help" title="Как это работает?" aria-label="Как это работает?">${svg('help')}</button>
         <button class="btn-icon" data-action="undo" title="Отменить последний выбор" aria-label="Отменить последний выбор" ${session.actions?'' : 'disabled'}>${svg('undo')}</button>
         <button class="btn btn-quiet btn-small" data-action="finish-session">Завершить</button></div>
       <div class="swipe-stage" id="swipeStage">${nextMovie?`<article class="swipe-card-next" id="nextSwipeCard" aria-hidden="true">${swipeCardHTML(nextMovie,false)}</article>`:''}<article class="swipe-card" id="activeSwipeCard" data-movie-id="${esc(movie.id)}">${swipeCardHTML(movie,true)}</article></div>
       <div class="swipe-actions"><button class="swipe-action no" data-action="swipe-left" title="Не моё · ←" aria-label="Пропустить">${svg('close')}</button><button class="swipe-action watched" data-action="swipe-watched" title="Уже смотрел · ↑" aria-label="Уже смотрел">${svg('check')}</button><button class="swipe-action yes" data-action="swipe-right" title="Хочу посмотреть · →" aria-label="Хочу посмотреть">${svg('bookmark')}</button></div>
-      <div class="keyboard-hint">Клавиши: <kbd>←</kbd> пропустить &nbsp; <kbd>↑</kbd> уже смотрел &nbsp; <kbd>→</kbd> сохранить &nbsp; <kbd>Пробел</kbd> подробнее</div>
+      <div class="gesture-hint"><span>← Не моё</span><span>↑ Смотрел</span><span>Хочу →</span></div>
+      <div class="keyboard-hint">Клавиши: <kbd>←</kbd> не моё &nbsp; <kbd>↑</kbd> уже смотрел &nbsp; <kbd>→</kbd> хочу &nbsp; <kbd>Пробел</kbd> подробнее</div>
     </div><aside class="session-aside"><h3>Ваши последние решения</h3><p>Здесь отображаются фильмы, на которые вы уже отреагировали.</p><div class="session-aside-list">${previous.length?previous.map(e=>`<div class="session-aside-item">${moviePoster(e.movie||{})}<span>${esc(e.movie?.title||'Фильм')}</span><strong style="margin-left:auto;color:${e.type==='right'?'#59866b':e.type==='left'?'#bd7669':'#65859a'}">${e.type==='right'?'♥':e.type==='left'?'×':'✓'}</strong></div>`).join(''):'<span class="small muted">Пока нет реакций.</span>'}</div><div class="keyboard-hint">Подборка сохраняется автоматически. Можно закрыть вкладку и вернуться позже.</div></aside></div></div>`;
   bindSwipeGesture();
+  if(!session.actions&&!lsGet('sw_demo')&&!matchMedia('(prefers-reduced-motion: reduce)').matches){   // демонстрация жеста при первом показе
+    lsSet('sw_demo','1');const dc=$('#activeSwipeCard');
+    if(dc&&dc.animate)dc.animate([{transform:REST},{transform:'translate3d(34px,0,0) rotate(2deg)'},{transform:'translate3d(-34px,0,0) rotate(-2deg)'},{transform:REST}],{duration:1400,delay:600,easing:'ease-in-out'});
+  }
   if(session.queue.length<=2&&!sessionIsDone(session)) loadNextBatch(true);
 }
 function updateProgressUI(){
@@ -428,15 +443,19 @@ function renderEmptyDeck(){
 }
 const FLY={right:'translate3d(460px,25px,0) rotate(18deg)',left:'translate3d(-460px,25px,0) rotate(-18deg)',up:'translate3d(0,-520px,0) scale(.94)'};
 const REST='translate3d(0,0,0) rotate(0deg)';
-function setCardStamp(kind,opacity){['right','left','up'].forEach(k=>{const el=$('#stamp'+k[0].toUpperCase()+k.slice(1));if(el)el.style.opacity=(k===kind?opacity:0);});}
+const GLOW={right:'46,125,82',left:'200,70,60',up:'60,120,180'};
+function setCardStamp(kind,opacity){['right','left','up'].forEach(k=>{const el=$('#stamp'+k[0].toUpperCase()+k.slice(1));if(el)el.style.opacity=(k===kind?opacity:0);});
+  const c=$('#activeSwipeCard');if(c){const g=GLOW[kind];c.style.boxShadow=(g&&opacity>0)?`0 0 0 4px rgba(${g},${(.85*opacity).toFixed(2)}),0 0 38px rgba(${g},${(.55*opacity).toFixed(2)}),0 18px 44px rgba(38,31,23,.17)`:'';}}
 function setNextProgress(p){const n=$('#nextSwipeCard');if(n){n.style.transform=`scale(${.95+.05*p}) translateY(${10-10*p}px)`;n.style.opacity=String(.6+.4*p);}}
 function resetCard(){const c=$('#activeSwipeCard');if(!c)return;c.classList.add('animating');c.style.transform=REST;c.style.opacity='1';setCardStamp(null,0);setNextProgress(0);}
+const FLY_LIGHT={right:'translate3d(90px,0,0)',left:'translate3d(-90px,0,0)',up:'translate3d(0,-90px,0)'};
 function flyOut(action){
   const c=$('#activeSwipeCard');
-  if(!c||!FLY[action]||matchMedia('(prefers-reduced-motion: reduce)').matches)return Promise.resolve();
+  if(!c||!FLY[action])return Promise.resolve();
+  const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;   // лёгкая версия вместо полного отключения
   setCardStamp(action,1);setNextProgress(1);
-  c.classList.add('animating');c.style.transform=FLY[action];c.style.opacity='0';
-  return new Promise(r=>setTimeout(r,380));
+  c.classList.add('animating');c.style.transform=(reduce?FLY_LIGHT:FLY)[action];c.style.opacity='0';
+  return new Promise(r=>setTimeout(r,reduce?260:380));
 }
 function bindSwipeGesture(){
   const el=$('#activeSwipeCard');if(!el)return;
@@ -453,9 +472,9 @@ function bindSwipeGesture(){
     const {dx,dy}=drag;
     el.style.transform=`translate3d(${dx}px,${dy}px,0) rotate(${dx*0.05}deg)`;
     setNextProgress(Math.min(1,Math.hypot(dx,dy)/130));
-    if(dy<-40&&Math.abs(dy)>Math.abs(dx)*1.1)setCardStamp('up',Math.min(1,(Math.abs(dy)-35)/65));
-    else if(dx>35)setCardStamp('right',Math.min(1,(dx-30)/70));
-    else if(dx<-35)setCardStamp('left',Math.min(1,(Math.abs(dx)-30)/70));
+    if(dy<-25&&Math.abs(dy)>Math.abs(dx)*1.1)setCardStamp('up',Math.min(1,(Math.abs(dy)-15)/55));
+    else if(dx>20)setCardStamp('right',Math.min(1,(dx-12)/60));
+    else if(dx<-20)setCardStamp('left',Math.min(1,(Math.abs(dx)-12)/60));
     else setCardStamp(null,0);
   });
   const end=(e,cancel)=>{
@@ -480,6 +499,7 @@ function applySwipeToCollection(id,action){
 async function performSwipe(action,rating=null){
   const s=state.session;if(!s||!s.queue.length||state.swiping)return false;
   state.swiping=true;
+  try{navigator.vibrate&&navigator.vibrate(action==='up'?[12,40,12]:15);}catch(_){}
   const flight=flyOut(action);
   try{
     const movie=s.queue[0];
@@ -645,7 +665,7 @@ function reactionBadge(item){const r=REACTIONS[item.action];if(!r)return '<span 
 function renderSessionDetail(){const d=state.sessionDetail;if(!d)return;const cards=d.cards||[];const count=cards.length;$('#view').innerHTML=`<div class="heading-row"><div><button class="text-link" data-action="back-history">← К истории</button><div class="eyebrow" style="margin-top:13px">АРХИВ ПОДБОРКИ</div><h1 class="page-title">${d.surprise?'Удиви меня':'Подборка по настроению'}</h1><p class="page-subtitle">${fmtDate(d.started_at)} · ${count} карточек · статус: ${d.status==='finished'?'завершена':d.status==='active'?'в процессе':'прервана'}</p></div><button class="btn btn-primary" data-action="repeat-session">Повторить подбор ${svg('refresh')}</button></div>${resultSectionsHTML(state.sessionResult,{withSaved:false})}<section class="section-block"><div class="section-heading"><div><h2>Все карточки подборки</h2><p>Ваши реакции на каждый фильм.</p></div></div><div class="movie-grid">${cards.map(item=>`<div class="session-card-wrap">${renderMovieCard(item.movie)}${reactionBadge(item)}</div>`).join('')}</div></section>`;}
 
 async function renderProfile(){state.page='profile';setNav('profile');$('#view').innerHTML='<div class="loading-inline"><span class="loader"></span>Загружаем профиль…</div>';try{const [profile,dashboard,providers]=await Promise.all([api('/me/profile'),api('/me/dashboard'),api('/auth/providers')]);state.profile=profile;state.dashboard=dashboard;state.providers=providers;refreshIdentity();}catch(error){console.warn(error);}const p=state.profile||{display_name:'Киноман'};const connected=!!state.dashboard?.has_vk;
-  $('#view').innerHTML=`<div class="heading-row"><div><div class="eyebrow">ВАШ АККАУНТ</div><h1 class="page-title">Профиль</h1><p class="page-subtitle">Настройки аккаунта и ваша история предпочтений.</p></div></div><div class="profile-layout"><section class="profile-card"><div class="profile-avatar-large">${p.avatar_url?`<img src="${esc(safeUrl(p.avatar_url))}" alt="">`:esc(getInitial(p.display_name))}</div><div><h2>${esc(p.display_name||'Киноман')}</h2><p>${connected?'Аккаунт связан с VK ID':'Гостевой аккаунт'}</p><span class="profile-chip">${connected?'СИНХРОНИЗАЦИЯ ВКЛЮЧЕНА':'ДАННЫЕ СОХРАНЯЮТСЯ В ЭТОМ БРАУЗЕРЕ'}</span></div></section><section class="panel"><div class="profile-form"><div><div class="eyebrow">ЛИЧНЫЕ ДАННЫЕ</div><h2 class="panel-title" style="margin-top:7px">Как к вам обращаться?</h2><p class="panel-subtitle">Имя отображается только в вашем профиле.</p></div><div class="field"><label for="profileName">Имя</label><input id="profileName" class="input-field" maxlength="80" value="${esc(p.display_name||'Киноман')}"></div><div><button class="btn btn-primary" data-action="save-profile">Сохранить изменения</button></div></div><div class="spacer"></div>${(connected||state.providers.vk)?`<div class="setting-row"><div><strong>${connected?'VK ID подключён':'Сохранить профиль через VK ID'}</strong><small>${connected?'Коллекция и история привязаны к вашему VK ID.':'После подключения можно открывать коллекцию с разных устройств.'}</small></div>${connected?'<span class="profile-chip" style="margin:0;background:#e8f0e9;color:#40745c">Подключён</span>':`<button class="btn btn-dark btn-small" data-action="vk-login">${svg('vk')} Войти через VK</button>`}</div>`:''}<div class="setting-row"><div><strong>Экспорт коллекции</strong><small>Скачать список фильмов и историю подборок в JSON.</small></div><button class="btn btn-quiet btn-small" data-action="export-data">${svg('download')} Скачать</button></div><div class="setting-row"><div><strong>Выйти из аккаунта</strong><small>${connected?'Вы сможете войти снова через VK ID.':'Гостевой профиль хранится только в этом браузере: после выхода вернуться к нему не получится.'}</small></div><button class="btn btn-quiet btn-small" data-action="logout">Выйти</button></div></section></div><section class="section-block"><div class="section-heading"><div><h2>Данные и приватность</h2><p>Вы контролируете свою коллекцию и историю.</p></div></div><div class="panel"><div class="setting-row"><div><strong>Очистить историю реакций</strong><small>Удалит историю лайков, пропусков и просмотренного, а также коллекцию.</small></div><button class="btn btn-danger btn-small" data-action="reset-history">Очистить данные</button></div><div class="inline-note">Swipe&Watch не публикует ваши списки автоматически. Для совместного использования в будущей версии будет отдельная настройка приватности.</div></div></section>`;
+  $('#view').innerHTML=`<div class="heading-row"><div><div class="eyebrow">ВАШ АККАУНТ</div><h1 class="page-title">Профиль</h1><p class="page-subtitle">Настройки аккаунта и ваша история предпочтений.</p></div></div><div class="profile-layout"><section class="profile-card"><div class="profile-avatar-large">${p.avatar_url?`<img src="${esc(safeUrl(p.avatar_url))}" alt="">`:esc(getInitial(p.display_name))}</div><div><h2>${esc(p.display_name||'Киноман')}</h2><p>${connected?'Аккаунт связан с VK ID':'Гостевой аккаунт'}</p><span class="profile-chip">${connected?'СИНХРОНИЗАЦИЯ ВКЛЮЧЕНА':'ДАННЫЕ СОХРАНЯЮТСЯ В ЭТОМ БРАУЗЕРЕ'}</span></div></section><section class="panel"><div class="profile-form"><div><div class="eyebrow">ЛИЧНЫЕ ДАННЫЕ</div><h2 class="panel-title" style="margin-top:7px">Как к вам обращаться?</h2><p class="panel-subtitle">Имя отображается только в вашем профиле.</p></div><div class="field"><label for="profileName">Имя</label><input id="profileName" class="input-field" maxlength="80" value="${esc(p.display_name||'Киноман')}"></div><div><button class="btn btn-primary" data-action="save-profile">Сохранить изменения</button></div></div><div class="spacer"></div>${(connected||state.providers.vk)?`<div class="setting-row"><div><strong>${connected?'VK ID подключён':'Сохранить данные — войти через VK'}</strong><small>${connected?'Коллекция и история привязаны к вашему VK ID.':'После подключения можно открывать коллекцию с разных устройств.'}</small></div>${connected?'<span class="profile-chip" style="margin:0;background:#e8f0e9;color:#40745c">Подключён</span>':`<button class="btn btn-dark btn-small" data-action="vk-login">${svg('vk')} Войти через VK</button>`}</div>`:''}<div class="setting-row"><div><strong>Как это работает?</strong><small>Короткая памятка: жесты, коллекция, история.</small></div><button class="btn btn-quiet btn-small" data-action="help">Открыть</button></div><div class="setting-row"><div><strong>Экспорт коллекции</strong><small>Скачать список фильмов и историю подборок в JSON.</small></div><button class="btn btn-quiet btn-small" data-action="export-data">${svg('download')} Скачать</button></div><div class="setting-row"><div><strong>${connected?'Выйти из VK ID':'Сбросить гостевой профиль'}</strong><small>${connected?'Данные сохранятся в вашем аккаунте.':'Коллекция и история будут удалены с этого устройства. Привяжите VK ID, чтобы сохранить.'}</small></div><button class="btn ${connected?'btn-quiet':'btn-danger'} btn-small" data-action="logout">${connected?'Выйти':'Сбросить'}</button></div></section></div><section class="section-block"><div class="section-heading"><div><h2>Данные и приватность</h2><p>Вы контролируете свою коллекцию и историю.</p></div></div><div class="panel"><div class="setting-row"><div><strong>Очистить историю реакций</strong><small>Удалит историю лайков, пропусков и просмотренного, а также коллекцию.</small></div><button class="btn btn-danger btn-small" data-action="reset-history">Очистить данные</button></div><div class="inline-note">Swipe&Watch не публикует ваши списки автоматически. Для совместного использования в будущей версии будет отдельная настройка приватности.</div></div></section>`;
 }
 async function saveProfile(){const display_name=$('#profileName')?.value.trim();if(!display_name){showToast('Введите имя');return;}try{state.profile=await api('/me/profile',{method:'PATCH',body:{display_name}});state.dashboard=await api('/me/dashboard');refreshIdentity();showToast('Профиль сохранён');renderProfile();}catch(error){showToast(error.message);}}
 async function startVkLogin(){try{const result=await api('/auth/vk/start');if(result.authorization_url)location.href=result.authorization_url;else showToast('VK ID не настроен');}catch(error){showToast(error.message);}}
@@ -664,7 +684,7 @@ async function resetHistory(){
 }
 async function logout(){
   const guest=!state.dashboard?.has_vk;
-  if(!(await confirmDialog({title:'Выйти из аккаунта?',text:guest?'Это гостевой профиль: он хранится только в этом браузере. После выхода его коллекция и история станут недоступны.':'Вы сможете снова войти через VK ID.',okLabel:'Выйти',danger:guest})))return;
+  if(!(await confirmDialog({title:guest?'Сбросить гостевой профиль?':'Выйти из VK ID?',text:guest?'Коллекция и история будут удалены с этого устройства. Привяжите VK ID, чтобы сохранить.':'Данные сохранятся в вашем аккаунте.',okLabel:guest?'Сбросить':'Выйти',danger:guest})))return;
   tokenStore.clear();state.token='';state.session=null;state.dashboard=null;state.profile=null;state.collectionMap.clear();state.collectionItems=[];state.historyItems=[];state.selectedGenres=new Set();
   await bootstrap();
 }
@@ -676,10 +696,10 @@ function confirmDialog({title,text,okLabel='Подтвердить',cancelLabel=
   });
 }
 function settleConfirm(value){const r=state.confirmResolve;state.confirmResolve=null;$('#modalRoot').innerHTML='';if(r)r(value);}
-function openMovieDetails(id){const movie=state.movieCache.get(String(id));if(movie&&state.session&&currentCard()&&String(currentCard().id)===String(id))state.session.detailsOpened=true;if(!movie){showToast('Не удалось найти карточку фильма');return;}state.detailMovie=movie;const host=$('#modalRoot');host.innerHTML=`<div class="modal-backdrop" data-action="close-modal"><section class="modal" role="dialog" aria-modal="true" aria-label="Информация о фильме"><button class="modal-close" data-action="close-modal">×</button><div class="movie-modal-layout"><div class="movie-modal-poster">${moviePoster(movie)}</div><div class="movie-modal-copy"><div class="eyebrow">${esc(movie.type||'ФИЛЬМ')} ${movie.year?`· ${esc(movie.year)}`:''}</div><h2>${esc(movie.title)}</h2><div class="movie-modal-meta">${esc(movie.originalTitle&&movie.originalTitle!==movie.title?movie.originalTitle:'')}${movie.duration?` · ${esc(movie.duration)}`:''}${movie.age?` · ${esc(movie.age)}`:''}</div><div class="movie-card-meta" style="margin-top:11px">${movie.kp?`<span class="movie-card-rating">★ КП ${Number(movie.kp).toFixed(1)}</span>`:''}${movie.imdb?`<span class="movie-card-rating">IMDb ${Number(movie.imdb).toFixed(1)}</span>`:''}</div><div class="swipe-tags" style="margin-top:12px">${(movie.genres||[]).map(g=>`<span style="background:#f0eee7;border-color:#e2ded5;color:#777">${esc(g)}</span>`).join('')}</div><p>${esc(movie.synopsis||movie.shortHook||'Описание пока отсутствует.')}</p>${myNoteBlock(movie)}<div class="modal-actions"><button class="btn btn-primary" data-action="detail-watchlist" data-id="${esc(movie.id)}">${svg('bookmark')} Хочу посмотреть</button><button class="btn btn-quiet" data-action="detail-favorite" data-id="${esc(movie.id)}">${svg('heart')} В избранное</button><button class="btn btn-quiet" data-action="detail-watched" data-id="${esc(movie.id)}">${svg('check')} Просмотрено</button></div>${movie.kinopoiskUrl&&safeUrl(movie.kinopoiskUrl)?`<a class="text-link" href="${esc(safeUrl(movie.kinopoiskUrl))}" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-top:16px">Открыть на Кинопоиске ↗</a>`:''}</div></div></section></div>`;}
+function openMovieDetails(id){const movie=state.movieCache.get(String(id));if(movie&&state.session&&currentCard()&&String(currentCard().id)===String(id))state.session.detailsOpened=true;if(!movie){showToast('Не удалось найти карточку фильма');return;}state.detailMovie=movie;const cs=getCollectionState(movie.id)||{};const host=$('#modalRoot');host.innerHTML=`<div class="modal-backdrop" data-action="close-modal"><section class="modal" role="dialog" aria-modal="true" aria-label="Информация о фильме"><button class="modal-close" data-action="close-modal">×</button><div class="movie-modal-layout"><div class="movie-modal-poster">${moviePoster(movie)}</div><div class="movie-modal-copy"><div class="eyebrow">${esc(movie.type||'ФИЛЬМ')} ${movie.year?`· ${esc(movie.year)}`:''}</div><h2>${esc(movie.title)}</h2><div class="movie-modal-meta">${esc(movie.originalTitle&&movie.originalTitle!==movie.title?movie.originalTitle:'')}${movie.duration?` · ${esc(movie.duration)}`:''}${movie.age?` · ${esc(movie.age)}`:''}</div><div class="movie-card-meta" style="margin-top:11px">${movie.kp?`<span class="movie-card-rating">★ КП ${Number(movie.kp).toFixed(1)}</span>`:''}${movie.imdb?`<span class="movie-card-rating">IMDb ${Number(movie.imdb).toFixed(1)}</span>`:''}</div><div class="swipe-tags" style="margin-top:12px">${(movie.genres||[]).map(g=>`<span style="background:#f0eee7;border-color:#e2ded5;color:#777">${esc(g)}</span>`).join('')}</div><p>${esc(flat(movie.synopsis||movie.shortHook||'Описание пока отсутствует.'))}</p>${myNoteBlock(movie)}<div class="modal-actions"><button class="btn ${cs.in_watchlist?'btn-primary':'btn-quiet'}" data-action="detail-watchlist" data-id="${esc(movie.id)}">${svg('bookmark')} ${cs.in_watchlist?'В списке':'Хочу посмотреть'}</button><button class="btn ${cs.favorite?'btn-primary':'btn-quiet'}" data-action="detail-favorite" data-id="${esc(movie.id)}">${svg('heart')} ${cs.favorite?'В избранном':'В избранное'}</button><button class="btn ${cs.watched?'btn-primary':'btn-quiet'}" data-action="detail-watched" data-id="${esc(movie.id)}">${svg('check')} ${cs.watched?'Просмотрено ✓':'Просмотрено'}</button></div>${movie.kinopoiskUrl&&safeUrl(movie.kinopoiskUrl)?`<a class="text-link" href="${esc(safeUrl(movie.kinopoiskUrl))}" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-top:16px">Открыть на Кинопоиске ↗</a>`:''}</div></div></section></div>`;}
 function myNoteBlock(movie){
   const item=getCollectionState(movie.id)||{};const cur=item.rating?Math.round(item.rating/2):0;
-  return `<div class="my-note"><h4>Моя оценка и заметка</h4><div class="rating-stars" id="myRatingStars" data-rating="${cur}">${[1,2,3,4,5].map(n=>`<button data-action="my-rating" data-id="${n}" class="${n<=cur?'active':''}" aria-label="${n} из 5">★</button>`).join('')}</div><textarea id="movieNote" maxlength="2000" placeholder="Заметка о фильме…" data-initial="${esc(item.note||'')}">${esc(item.note||'')}</textarea><button class="btn btn-quiet btn-small" data-action="save-note" data-id="${esc(movie.id)}" style="margin-top:10px">Сохранить</button></div>`;
+  return `<div class="my-note"><h4>Моя оценка и заметка</h4><div class="rating-stars" id="myRatingStars" data-rating="${cur}">${[1,2,3,4,5].map(n=>`<button data-action="my-rating" data-id="${n}" class="${n<=cur?'active':''}" aria-label="${n} из 5">★</button>`).join('')}</div><textarea id="movieNote" maxlength="2000" placeholder="Заметка о фильме…" data-initial="${esc(item.note||'')}">${esc(item.note||'')}</textarea><button class="btn btn-primary btn-small save-note-btn" data-action="save-note" data-id="${esc(movie.id)}">Сохранить оценку и заметку</button></div>`;
 }
 async function saveMyNote(id){
   const box=$('#movieNote');if(!box)return;const item=getCollectionState(id);const patch={};
@@ -750,6 +770,7 @@ async function handleAction(button){const action=button.dataset.action;const id=
     state.session=null;
     if(d.surprise){await startSession(true,{content_type:'all',...(d.filters||{})});}else navigate('discover');
   }
+  else if(action==='help')openOnboarding();
   else if(action==='retry')bootstrap();
   else if(action==='reload-collection')loadCollection();
   else if(action==='reload-history')loadHistory();
@@ -768,6 +789,7 @@ document.addEventListener('click',event=>{
 
 document.addEventListener('change',event=>{
   const keys={filterType:'content_type',filterDuration:'max_duration',filterYearFrom:'year_from',filterYearTo:'year_to',filterRating:'min_rating',filterAge:'max_age'};
+  if(event.target.id==='filterDuration'){const v=event.target.value;state.filterDefaults.max_duration=(v===''||v==='long')?'':Number(v);state.filterDefaults.min_duration=v==='long'?180:'';return;}
   const key=keys[event.target.id];if(key)state.filterDefaults[key]=event.target.value===''?'':(key==='content_type'?event.target.value:Number(event.target.value));
 });
 document.addEventListener('input',event=>{
@@ -786,3 +808,24 @@ document.addEventListener('keydown',event=>{
 
 new MutationObserver(()=>document.body.classList.toggle('in-session',!!document.querySelector('#view .session-screen'))).observe($('#view'),{childList:true});
 bootstrap();
+
+/* ===== U2: онбординг / «Как это работает?» ===== */
+const OB_STEPS=[
+  {i:'sparkles',t:'Подберём фильм на вечер',p:'Выберите настроение, жанры и время — Swipe&Watch предложит подходящие фильмы.'},
+  {i:'bookmark',t:'Листайте карточки',p:'← Не моё · → Хочу посмотреть · ↑ Уже смотрел. Кнопка «i» или пробел — подробнее. Те же действия есть кнопками под карточкой.'},
+  {i:'history',t:'Коллекция и история',p:'«Коллекция» — фильмы, которые вы хотите посмотреть или уже смотрели. «История» — ваши прошлые подборки.'},
+  {i:'user',t:'Где хранятся данные',p:'Гость хранится только на этом устройстве: при очистке браузера данные пропадут. Войдите через VK ID — и коллекция сохранится.'}
+];
+function openOnboarding(){
+  lsSet('sw_onboarded','1');closeModal();let n=0;const host=$('#modalRoot');
+  const draw=()=>{const st=OB_STEPS[n],last=n===OB_STEPS.length-1;
+    host.innerHTML=`<div class="modal-backdrop" data-action="close-modal"><section class="modal ob" role="dialog" aria-modal="true" aria-label="Как это работает"><div class="ob-ico">${svg(st.i)}</div><h2>${esc(st.t)}</h2><p>${esc(st.p)}</p><div class="ob-dots">${OB_STEPS.map((_,k)=>`<i class="${k===n?'on':''}"></i>`).join('')}</div>${last&&state.providers?.vk?'<button class="btn btn-dark" data-action="vk-login" style="width:100%;margin-bottom:8px">'+svg('vk')+' Сохранить данные — войти через VK</button>':''}<div class="ob-actions"><button class="btn btn-quiet" data-ob="${n?'back':'skip'}">${n?'Назад':'Пропустить'}</button><button class="btn btn-primary" data-ob="${last?'done':'next'}">${last?'Начать':'Далее'}</button></div></section></div>`;
+    host.querySelectorAll('[data-ob]').forEach(b=>b.addEventListener('click',()=>{const a=b.dataset.ob;if(a==='next'){n++;draw();}else if(a==='back'){n--;draw();}else closeModal();}));};
+  draw();
+}
+/* ===== V4: блокировка фона, Esc, закрытие свайпом вниз ===== */
+new MutationObserver(()=>document.body.classList.toggle('modal-open',!!$('#modalRoot').firstElementChild)).observe($('#modalRoot'),{childList:true});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('#modalRoot').firstElementChild)closeModal();});
+(()=>{let y0=null;const root=$('#modalRoot');
+  root.addEventListener('touchstart',e=>{const m=e.target.closest('.modal');y0=(m&&m.scrollTop<=0&&!e.target.closest('textarea'))?e.touches[0].clientY:null;},{passive:true});
+  root.addEventListener('touchend',e=>{if(y0!=null&&e.changedTouches[0].clientY-y0>110)closeModal();y0=null;},{passive:true});})();

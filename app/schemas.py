@@ -47,6 +47,7 @@ def movie_out(m: Movie) -> MovieOut:
 class SessionFilters(BaseModel):
     content_type: Literal["all", "films", "series"] = "all"
     max_duration: int | None = Field(default=None, ge=30, le=360)
+    min_duration: int | None = Field(default=None, ge=30, le=360)
     year_from: int | None = Field(default=None, ge=1888, le=2100)
     year_to: int | None = Field(default=None, ge=1888, le=2100)
     min_rating: float | None = Field(default=None, ge=0, le=10)
